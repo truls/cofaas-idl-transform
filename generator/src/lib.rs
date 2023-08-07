@@ -1,8 +1,7 @@
-use log::{trace};
 use anyhow::{anyhow, Context, Error, Result};
-use indexmap::IndexMap;
-use itertools::Itertools;
 use convert_case::{Case, Casing};
+use indexmap::{indexmap, IndexMap};
+use itertools::Itertools;
 use protobuf::descriptor::{
     field_descriptor_proto::Type as ProtoType, DescriptorProto, EnumDescriptorProto,
     FileDescriptorProto, ServiceDescriptorProto,
@@ -14,10 +13,11 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
+use wit_component::WitPrinter;
 use wit_parser::{
-    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId,
-    PackageId, PackageName, Record, Resolve, Results, Type, TypeDef, TypeDefKind, TypeId,
-    TypeOwner, UnresolvedPackage,
+    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId,
+    PackageName, Record, Resolve, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner,
+    UnresolvedPackage, World, WorldItem, WorldKey,
 };
 
 const WIT_NAMESPACE: &str = "gen";
@@ -37,26 +37,28 @@ pub enum IdfMappingError {
 }
 
 pub struct IdfMapper {
-    orig_package: Option<String>,
+    orig_package_name: Option<String>,
     type_map: HashMap<String, TypeId>,
     pkg: UnresolvedPackage,
 }
 
 impl IdfMapper {
+    pub fn new() -> Self {
+        let upkg = Self::unsafe_parse_wit_to_unresolved_package("package foo:bar\n");
+
+        Self {
+            orig_package_name: None,
+            type_map: HashMap::new(),
+            pkg: upkg,
+        }
+    }
+
     fn lookup_type_id(&mut self, name: &String) -> Result<TypeId> {
         self.type_map
             .get(&IdfMapper::convert_case(name))
             .ok_or(anyhow!("Type name {} does not exist.", name))
             .copied()
     }
-
-    // fn lookup_type(&mut self, name: &String) -> Result<&TypeDef> {
-    //     let ty_id = self.lookup_type_id(name)?;
-    //     self.pkg
-    //         .types
-    //         .get(ty_id)
-    //         .ok_or(anyhow!("Type name {} not defined.", name))
-    // }
 
     fn map_name(name: String) -> PackageName {
         PackageName {
@@ -173,7 +175,7 @@ impl IdfMapper {
             .get_mut(ty_id)
             .ok_or(anyhow!("Invalid type reference"))?;
 
-        println!("{:#?}", ty_ref.owner);
+        //println!("{:#?}", ty_ref.owner);
         if ty_ref.owner != TypeOwner::None && ty_ref.owner != owner {
             return Err(anyhow!(
                 "Owner for type {} already set not to us",
@@ -193,7 +195,7 @@ impl IdfMapper {
             .context(IdfMappingError::UnnamedMessage())?;
         let mut referenced_types: Vec<TypeId> = Vec::new();
         let mut func_map = IndexMap::<String, Function>::new();
-        let funcs: Vec<Function> = service
+        let mut funcs: Vec<Function> = service
             .method
             .iter()
             .map(|x| {
@@ -219,12 +221,22 @@ impl IdfMapper {
                 Ok::<Function, Error>(Function {
                     docs: Docs::default(),
                     name: method_name,
-                    kind: FunctionKind::Method,
+                    kind: FunctionKind::Freestanding,
                     params: input_type,
                     results: output_type,
                 })
             })
             .try_collect()?;
+
+        // Append the function provided by all components for running
+        // initialization routines
+        funcs.push(Function {
+            docs: Docs::default(),
+            name: "init-component".to_string(),
+            kind: FunctionKind::Freestanding,
+            params: Vec::new(),
+            results: Results::Named(Vec::new()),
+        });
 
         for f in funcs {
             func_map.insert(f.name.clone(), f);
@@ -270,7 +282,7 @@ impl IdfMapper {
                 return Err(anyhow!("Type {} already exists", ty_name));
             }
             let ty_name_ = self.proto_type_ref(ty_name);
-            println!("{}", ty_name_);
+            //println!("{}", ty_name_);
             assert!(self.type_map.insert(ty_name_, *t).is_none());
         }
         Ok(())
@@ -279,14 +291,18 @@ impl IdfMapper {
     /// Returns the internal proto reference to a name.
     /// Maps name to .package.name
     fn proto_type_ref(&self, name: String) -> String {
-        match self.orig_package.clone() {
+        match self.orig_package_name.clone() {
             None => format!(".{}", name),
             Some(pkg) => format!(".{}.{}", pkg, name),
         }
     }
 
-    fn map_protocol(&mut self, proto: &FileDescriptorProto) -> Result<()> {
-        self.orig_package = proto.package.clone();
+    /// Merge several interfaecs (if there are any) since we generate
+    /// one interface per service and we can only have one interface
+    /// per component
+
+    fn map_protocol(&mut self, proto: &FileDescriptorProto) -> Result<InterfaceId> {
+        self.orig_package_name = proto.package.clone();
         //self.name = map+proto.package;
 
         let proto_name = proto
@@ -310,7 +326,7 @@ impl IdfMapper {
             .try_collect()?;
         self.add_types_tp_map(&enums)?;
 
-        let _ifaces: Vec<InterfaceId> = proto
+        let ifaces: Vec<InterfaceId> = proto
             .service
             .iter()
             .map(|x| self.map_service(x))
@@ -318,19 +334,77 @@ impl IdfMapper {
 
         self.pkg.name = proto_name;
 
-        Ok(())
+        if ifaces.len() != 1 {
+            return Err(anyhow!("Currently only supports protocols that export exactly one interface. TODO: merge function"));
+        }
+        Ok(ifaces[0])
     }
 
-    pub fn parse() -> Result<Self> {
-        let include_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "examples"].iter().collect();
-        let proto_path: PathBuf = include_dir.join("helloworld.proto");
+    /// Returns an import/export map world declaration given an
+    /// optional InterfaceId
+    fn to_import_export_map(entry: Option<InterfaceId>) -> IndexMap<WorldKey, WorldItem> {
+        match entry {
+            Some(if_id) => indexmap! {
+                WorldKey::Interface(if_id) => WorldItem::Interface(if_id)
+            },
+            None => indexmap! {},
+        }
+    }
 
-        let upkg = UnresolvedPackage::parse(Path::new(""), "package foo:bar")?;
-        let mut this = Self {
-            orig_package: None,
-            type_map: HashMap::new(),
-            pkg: upkg,
+    fn unsafe_parse_wit_to_unresolved_package(code: &str) -> UnresolvedPackage {
+        UnresolvedPackage::parse(Path::new(""), code).expect("Parsing dummy WIT definition failed")
+    }
+
+    fn alloc_world(&mut self, world: World) -> () {
+        // Parse WIT definitions for fake worlds to satisfy assertions
+        // in the wit-parser resolver code. It's not pretty and there
+        // must be a better way to do this
+
+        let num_worlds = self.pkg.worlds.len() + 1;
+        let world_decls: String = { 0..num_worlds }
+            .map(|n| format!("world w{} {{export bar: func()\n}}", n))
+            .collect();
+        let mut upkg = Self::unsafe_parse_wit_to_unresolved_package(
+            format!("package foo:bar\n{}", world_decls).as_str(),
+        );
+        upkg.name = self.pkg.name.clone();
+        upkg.types = self.pkg.types.clone();
+        upkg.interfaces = self.pkg.interfaces.clone();
+        upkg.worlds = self.pkg.worlds.clone();
+        upkg.worlds.alloc(world);
+        self.pkg = upkg;
+
+        ()
+    }
+
+    /// Adds a world to the WIT definition containing specified
+    /// import and export.
+    pub fn push_world(&mut self, import: Option<InterfaceId>, export: Option<InterfaceId>) -> () {
+        let import_map = Self::to_import_export_map(import);
+        let export_map = Self::to_import_export_map(export);
+        let world = World {
+            name: "foo".to_string(),
+            docs: Docs::default(),
+            imports: import_map,
+            exports: export_map,
+            package: None,
+            includes: Vec::default(),
+            include_names: Vec::default(),
         };
+        self.alloc_world(world)
+    }
+
+    pub fn push_protocol(&mut self, proto_path: PathBuf) -> Result<InterfaceId> {
+        if !proto_path.is_file() {
+            return Err(anyhow!("Protocol path must be a file."));
+        }
+
+        if !proto_path.is_absolute() {
+            return Err(anyhow!("Protocol path must be absolute."));
+        }
+
+        // Absolute paths that point to a file will always have a parent
+        let include_dir = proto_path.parent().unwrap();
 
         let parsed = Parser::new()
             .pure()
@@ -343,18 +417,27 @@ impl IdfMapper {
             return Err(anyhow!("Can only handle a single protocol"));
         }
 
-        this.map_protocol(&parsed[0])?;
+        let interface = self.map_protocol(&parsed[0])?;
 
-        println! {"{:#?}", this.pkg};
+        // println! {"{:#?}", self.pkg};
 
-        Ok(this)
+        Ok(interface)
     }
 
     pub fn resolve(&self) -> Result<(Resolve, PackageId)> {
         let mut resolver = Resolve::default();
         let pkg_id = resolver.push(self.pkg.clone())?;
+
         Ok((resolver, pkg_id))
     }
+}
+
+pub fn generate_wit(proto_file: PathBuf) -> Result<String> {
+    let mut mapper = IdfMapper::new();
+    let interface = mapper.push_protocol(proto_file)?;
+    mapper.push_world(None, Some(interface));
+    let (resolver, pkg_id) = mapper.resolve()?;
+    WitPrinter::default().print(&resolver, pkg_id)
 }
 
 #[cfg(test)]
@@ -365,9 +448,16 @@ mod test_parser {
 
     #[test]
     fn can_parse() -> Result<()> {
-        let result = IdfMapper::parse()?;
-        let (resolver, pkg_id) = result.resolve()?;
-        //println!("{:#?}", res);
+        let include_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "examples"].iter().collect();
+        let proto_path = include_dir.join("helloworld.proto");
+
+        let mut mapper = IdfMapper::new();
+
+        let interface = mapper.push_protocol(proto_path)?;
+
+        mapper.push_world(None, Some(interface));
+
+        let (resolver, pkg_id) = mapper.resolve()?;
 
         let pretty = WitPrinter::default().print(&resolver, pkg_id)?;
 

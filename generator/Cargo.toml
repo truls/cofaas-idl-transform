@@ -10,11 +10,11 @@ anyhow = "1.0.71"
 convert_case = "0.6.0"
 id-arena = "2.2.1"
 index-map = "0.1.0"
-indexmap = "1.9.3"
+indexmap = "2.0.0"
 itertools = "0.10.5"
 log = "0.4.19"
 protobuf = { version = "4.0.0-alpha.0", path = "../../deps/rust-protobuf/protobuf" }
 protobuf-parse = { version = "4.0.0-alpha.0", path = "../../deps/rust-protobuf/protobuf-parse" }
 thiserror = "1.0.40"
-wit-component = { version = "0.11.0", path = "../../deps/wasm-tools/crates/wit-component" }
-wit-parser = { version = "0.8.0", path = "../../deps/wasm-tools/crates/wit-parser" }
+wit-component = { version = "0.13.1", path = "../../deps/wasm-tools/crates/wit-component" }
+wit-parser = { version = "0.9.2", path = "../../deps/wasm-tools/crates/wit-parser" }

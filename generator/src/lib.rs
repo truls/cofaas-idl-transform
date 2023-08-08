@@ -72,7 +72,7 @@ impl IdfMapper {
         name.to_case(Case::Kebab)
     }
 
-    fn map_type(proto_type: ProtoType) -> Result<Type, IdfMappingError> {
+    fn map_type(&mut self, proto_type: ProtoType) -> Result<Type, IdfMappingError> {
         match proto_type {
             ProtoType::TYPE_DOUBLE => Ok(Type::Float64),
             ProtoType::TYPE_FLOAT => Ok(Type::Float32),
@@ -83,13 +83,21 @@ impl IdfMapper {
             ProtoType::TYPE_FIXED32 => Ok(Type::S32),
             ProtoType::TYPE_BOOL => Ok(Type::Bool),
             ProtoType::TYPE_STRING => Ok(Type::String),
-            // ProtoType::TYPE_BYTES => Ok(TypeDefKind::List(Type::U8),
+            ProtoType::TYPE_BYTES => {
+                let t = TypeDef {
+                    docs: Docs::default(),
+                    kind: TypeDefKind::List(Type::U8),
+                    name: None,
+                    owner: TypeOwner::None,
+                };
+                let type_id = self.pkg.types.alloc(t);
+                Ok(Type::Id(type_id))
+            },
             ProtoType::TYPE_UINT32 => Ok(Type::U32),
             ProtoType::TYPE_SFIXED32 => Ok(Type::S32),
             ProtoType::TYPE_SFIXED64 => Ok(Type::S64),
             ProtoType::TYPE_SINT32 => Ok(Type::S32),
             ProtoType::TYPE_SINT64 => Ok(Type::S64),
-            ProtoType::TYPE_BYTES => Err(IdfMappingError::UnimplementedType("bytes".to_string())),
             ProtoType::TYPE_MESSAGE => {
                 Err(IdfMappingError::UnimplementedType("message".to_string()))
             }
@@ -115,7 +123,7 @@ impl IdfMapper {
                     .enum_value()
                     .map_err(|x| IdfMappingError::UnmatchedEnum(x))?;
 
-                let mapped_type = Self::map_type(unmapped_type)?;
+                let mapped_type = self.map_type(unmapped_type)?;
                 let field_name = x
                     .name
                     .as_ref()
@@ -444,12 +452,16 @@ pub fn generate_wit(proto_file: PathBuf) -> Result<String> {
 mod test_parser {
     use wit_component::WitPrinter;
 
+    use goldenfile::Mint;
+
+    use std::io::Write;
+
     use super::*;
 
-    #[test]
-    fn can_parse() -> Result<()> {
-        let include_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "examples"].iter().collect();
-        let proto_path = include_dir.join("helloworld.proto");
+    fn test_proto(proto_name: &str) -> Result<()> {
+        let test_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "testdata"].iter().collect();
+
+        let proto_path = test_dir.join(proto_name);
 
         let mut mapper = IdfMapper::new();
 
@@ -461,9 +473,24 @@ mod test_parser {
 
         let pretty = WitPrinter::default().print(&resolver, pkg_id)?;
 
-        println!("{}", pretty);
+        //println!("{}", pretty);
+
+        let mut minter = Mint::new(test_dir);
+        let mut hw_golden = minter.new_goldenfile(proto_name.to_owned() + ".golden").unwrap();
+
+        write!(hw_golden, "{pretty}").unwrap();
 
         Ok(())
+    }
+
+    #[test]
+    fn test_helloworld() -> Result<()> {
+        test_proto("helloworld.proto")
+    }
+
+    #[test]
+    fn test_prodcon() -> Result<()> {
+        test_proto("prodcon.proto")
     }
 
     #[test]

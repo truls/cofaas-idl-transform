@@ -1,0 +1,21 @@
+package gen:helloworld
+
+interface greeter {
+  record hello-request {
+    name: string,
+  }
+
+  record hello-reply {
+    message: string,
+  }
+
+  say-hello: func(arg: hello-request) -> hello-reply
+
+  say-hello-stream-reply: func(arg: hello-request) -> hello-reply
+
+  init-component: func()
+}
+
+world foo {
+  export greeter
+}

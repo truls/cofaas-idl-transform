@@ -1,0 +1,22 @@
+package gen:prodcon
+
+interface producer-consumer {
+  record consume-byte-request {
+    value: list<u8>,
+  }
+
+  record consume-byte-reply {
+    value: bool,
+    length: s32,
+  }
+
+  consume-byte: func(arg: consume-byte-request) -> consume-byte-reply
+
+  consume-stream: func(arg: consume-byte-request) -> consume-byte-reply
+
+  init-component: func()
+}
+
+world foo {
+  export producer-consumer
+}

@@ -92,7 +92,7 @@ impl IdfMapper {
                 };
                 let type_id = self.pkg.types.alloc(t);
                 Ok(Type::Id(type_id))
-            },
+            }
             ProtoType::TYPE_UINT32 => Ok(Type::U32),
             ProtoType::TYPE_SFIXED32 => Ok(Type::S32),
             ProtoType::TYPE_SFIXED64 => Ok(Type::S64),
@@ -476,7 +476,9 @@ mod test_parser {
         //println!("{}", pretty);
 
         let mut minter = Mint::new(test_dir);
-        let mut hw_golden = minter.new_goldenfile(proto_name.to_owned() + ".golden").unwrap();
+        let mut hw_golden = minter
+            .new_goldenfile(proto_name.to_owned() + ".golden")
+            .unwrap();
 
         write!(hw_golden, "{pretty}").unwrap();
 

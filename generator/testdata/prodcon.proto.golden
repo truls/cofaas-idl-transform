@@ -10,9 +10,9 @@ interface producer-consumer {
     length: s32,
   }
 
-  consume-byte: func(arg: consume-byte-request) -> consume-byte-reply
+  consume-byte: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
 
-  consume-stream: func(arg: consume-byte-request) -> consume-byte-reply
+  consume-stream: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
 
   init-component: func()
 }

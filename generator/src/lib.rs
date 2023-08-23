@@ -17,7 +17,7 @@ use wit_component::WitPrinter;
 use wit_parser::{
     Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId, Record,
     Resolve, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, UnresolvedPackage, World,
-    WorldItem, WorldKey,
+    WorldItem, WorldKey, Result_,
 };
 
 use std::fmt::Write;
@@ -215,7 +215,16 @@ impl IdfMapper {
                         .map_or(Ok(Results::Named(Vec::new())), |x| {
                             let type_id = self.lookup_type_id(&x)?;
                             referenced_types.push(type_id);
-                            Ok::<Results, Error>(Results::Anon(Type::Id(type_id)))
+
+                            // Construct a type of result<resturn_type, s32)
+                            let result_type = TypeDef{
+                                docs: Docs::default(),
+                                kind: TypeDefKind::Result(Result_{ok: Some(Type::Id(type_id)),
+                                                                  err: Some(Type::S32)}),
+                                name: None,
+                                owner: TypeOwner::None};
+                            let result_type_id = self.pkg.types.alloc(result_type);
+                            Ok::<Results, Error>(Results::Anon(Type::Id(result_type_id)))
                         })?;
 
                 Ok::<Function, Error>(Function {

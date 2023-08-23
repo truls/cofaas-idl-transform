@@ -1,4 +1,4 @@
-package gen:helloworld
+package cofaas:application
 
 interface greeter {
   record hello-request {

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Error, Result};
 use convert_case::{Case, Casing};
 use indexmap::{indexmap, IndexMap};
-use itertools::Itertools;
+use itertools::{enumerate, Itertools};
 use protobuf::descriptor::{
     field_descriptor_proto::Type as ProtoType, DescriptorProto, EnumDescriptorProto,
     FileDescriptorProto, ServiceDescriptorProto,
@@ -15,12 +15,12 @@ use std::{
 use thiserror::Error;
 use wit_component::WitPrinter;
 use wit_parser::{
-    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId,
-    PackageName, Record, Resolve, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner,
-    UnresolvedPackage, World, WorldItem, WorldKey,
+    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId, Record,
+    Resolve, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, UnresolvedPackage, World,
+    WorldItem, WorldKey,
 };
 
-const WIT_NAMESPACE: &str = "gen";
+use std::fmt::Write;
 
 #[derive(Error, Debug)]
 pub enum IdfMappingError {
@@ -44,7 +44,7 @@ pub struct IdfMapper {
 
 impl IdfMapper {
     pub fn new() -> Self {
-        let upkg = Self::unsafe_parse_wit_to_unresolved_package("package foo:bar\n");
+        let upkg = Self::unsafe_parse_wit_to_unresolved_package("package cofaas:application\n");
 
         Self {
             orig_package_name: None,
@@ -58,14 +58,6 @@ impl IdfMapper {
             .get(&IdfMapper::convert_case(name))
             .ok_or(anyhow!("Type name {} does not exist.", name))
             .copied()
-    }
-
-    fn map_name(name: String) -> PackageName {
-        PackageName {
-            namespace: String::from(WIT_NAMESPACE),
-            name,
-            version: None,
-        }
     }
 
     fn convert_case(name: &String) -> String {
@@ -311,13 +303,6 @@ impl IdfMapper {
 
     fn map_protocol(&mut self, proto: &FileDescriptorProto) -> Result<InterfaceId> {
         self.orig_package_name = proto.package.clone();
-        //self.name = map+proto.package;
-
-        let proto_name = proto
-            .package
-            .clone()
-            .context("Protocol must have a package name")
-            .map(IdfMapper::map_name)?;
 
         let records = proto
             .message_type
@@ -339,8 +324,6 @@ impl IdfMapper {
             .iter()
             .map(|x| self.map_service(x))
             .try_collect()?;
-
-        self.pkg.name = proto_name;
 
         if ifaces.len() != 1 {
             return Err(anyhow!("Currently only supports protocols that export exactly one interface. TODO: merge function"));
@@ -368,18 +351,30 @@ impl IdfMapper {
         // in the wit-parser resolver code. It's not pretty and there
         // must be a better way to do this
 
-        let num_worlds = self.pkg.worlds.len() + 1;
-        let world_decls: String = { 0..num_worlds }
-            .map(|n| format!("world w{} {{export bar: func()\n}}", n))
-            .collect();
-        let mut upkg = Self::unsafe_parse_wit_to_unresolved_package(
-            format!("package foo:bar\n{}", world_decls).as_str(),
-        );
+        let mut witb = String::new();
+
+        let mut worlds = self.pkg.worlds.clone();
+        worlds.alloc(world);
+
+        write!(&mut witb, "package foo:bar\n").unwrap();
+
+        for (n, (_, world)) in enumerate(worlds.iter()) {
+            write!(&mut witb, "world w{} {{\n", n).unwrap();
+            for n in 0..world.exports.len() {
+                write!(&mut witb, "export ex{}: func()\n", n).unwrap();
+            }
+            for n in 0..world.imports.len() {
+                write!(&mut witb, "import im{}: func()\n", n).unwrap();
+            }
+            write!(&mut witb, "}}\n").unwrap();
+        }
+
+        let mut upkg = Self::unsafe_parse_wit_to_unresolved_package(witb.as_str());
+
         upkg.name = self.pkg.name.clone();
         upkg.types = self.pkg.types.clone();
         upkg.interfaces = self.pkg.interfaces.clone();
-        upkg.worlds = self.pkg.worlds.clone();
-        upkg.worlds.alloc(world);
+        upkg.worlds = worlds;
         self.pkg = upkg;
 
         ()
@@ -387,11 +382,16 @@ impl IdfMapper {
 
     /// Adds a world to the WIT definition containing specified
     /// import and export.
-    pub fn push_world(&mut self, import: Option<InterfaceId>, export: Option<InterfaceId>) -> () {
+    pub fn push_world(
+        &mut self,
+        name: &str,
+        import: Option<InterfaceId>,
+        export: Option<InterfaceId>,
+    ) -> () {
         let import_map = Self::to_import_export_map(import);
         let export_map = Self::to_import_export_map(export);
         let world = World {
-            name: "foo".to_string(),
+            name: name.to_string(),
             docs: Docs::default(),
             imports: import_map,
             exports: export_map,
@@ -443,7 +443,7 @@ impl IdfMapper {
 pub fn generate_wit(proto_file: PathBuf) -> Result<String> {
     let mut mapper = IdfMapper::new();
     let interface = mapper.push_protocol(proto_file)?;
-    mapper.push_world(None, Some(interface));
+    mapper.push_world("foo", None, Some(interface));
     let (resolver, pkg_id) = mapper.resolve()?;
     WitPrinter::default().print(&resolver, pkg_id)
 }
@@ -460,14 +460,12 @@ mod test_parser {
 
     fn test_proto(proto_name: &str) -> Result<()> {
         let test_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "testdata"].iter().collect();
-
         let proto_path = test_dir.join(proto_name);
 
         let mut mapper = IdfMapper::new();
-
         let interface = mapper.push_protocol(proto_path)?;
 
-        mapper.push_world(None, Some(interface));
+        mapper.push_world("foo", None, Some(interface));
 
         let (resolver, pkg_id) = mapper.resolve()?;
 
@@ -496,11 +494,31 @@ mod test_parser {
     }
 
     #[test]
-    fn test_map_name() {
-        let result = IdfMapper::map_name(String::from("foo"));
-        assert_eq!(
-            format!("{}:{}", WIT_NAMESPACE, "foo"),
-            format!("{}", result)
+    fn test_multiple_file() -> Result<()> {
+        let test_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "testdata"].iter().collect();
+
+        let mut mapper = IdfMapper::new();
+        let hw_interface = mapper.push_protocol(test_dir.join("helloworld.proto"))?;
+        let prodcon_interface = mapper.push_protocol(test_dir.join("prodcon.proto"))?;
+
+        mapper.push_world(
+            "producer-interface",
+            Some(prodcon_interface),
+            Some(hw_interface),
         );
+
+        mapper.push_world("consumer-interface", None, Some(prodcon_interface));
+        mapper.push_world("top-level", None, Some(hw_interface));
+
+        let (resolver, pkg_id) = mapper.resolve()?;
+
+        let pretty = WitPrinter::default().print(&resolver, pkg_id)?;
+
+        let mut minter = Mint::new(test_dir);
+        let mut hw_golden = minter.new_goldenfile("hw_prodcon_combined.golden").unwrap();
+
+        write!(hw_golden, "{pretty}").unwrap();
+
+        Ok(())
     }
 }

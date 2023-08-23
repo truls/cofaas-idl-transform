@@ -1,4 +1,4 @@
-package gen:prodcon
+package cofaas:application
 
 interface producer-consumer {
   record consume-byte-request {

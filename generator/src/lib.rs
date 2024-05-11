@@ -449,14 +449,6 @@ impl IdfMapper {
     }
 }
 
-pub fn generate_wit(proto_file: PathBuf) -> Result<String> {
-    let mut mapper = IdfMapper::new();
-    let interface = mapper.push_protocol(proto_file)?;
-    mapper.push_world("foo", None, Some(interface));
-    let (resolver, pkg_id) = mapper.resolve()?;
-    WitPrinter::default().print(&resolver, pkg_id)
-}
-
 #[cfg(test)]
 mod test_parser {
     use wit_component::WitPrinter;

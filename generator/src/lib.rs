@@ -287,10 +287,10 @@ impl IdfMapper {
                 .clone()
                 .context("Type without name. This shouldn't happen")?;
 
-            if self.type_map.contains_key(&ty_name) {
-                return Err(anyhow!("Type {} already exists", ty_name));
+            let ty_name_ = self.proto_type_ref(&ty_name);
+            if self.type_map.contains_key(&ty_name_) {
+                return Err(anyhow!("Type {} already exists. Did you try to push the same protocol twice?", ty_name));
             }
-            let ty_name_ = self.proto_type_ref(ty_name);
             //println!("{}", ty_name_);
             assert!(self.type_map.insert(ty_name_, *t).is_none());
         }
@@ -299,7 +299,7 @@ impl IdfMapper {
 
     /// Returns the internal proto reference to a name.
     /// Maps name to .package.name
-    fn proto_type_ref(&self, name: String) -> String {
+    fn proto_type_ref(&self, name: &String) -> String {
         match self.orig_package_name.clone() {
             None => format!(".{}", name),
             Some(pkg) => format!(".{}.{}", pkg, name),

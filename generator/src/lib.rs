@@ -413,11 +413,13 @@ impl IdfMapper {
 
     pub fn push_protocol(&mut self, proto_path: PathBuf) -> Result<InterfaceId> {
         if !proto_path.is_file() {
-            return Err(anyhow!("Protocol path must be a file."));
+            let p = proto_path.display();
+            return Err(anyhow!("Protocol path {p} must be a file."));
         }
 
         if !proto_path.is_absolute() {
-            return Err(anyhow!("Protocol path must be absolute."));
+            let p = proto_path.display();
+            return Err(anyhow!("Protocol path {p} must be absolute."));
         }
 
         // Absolute paths that point to a file will always have a parent

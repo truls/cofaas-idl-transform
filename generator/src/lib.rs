@@ -418,7 +418,7 @@ impl IdfMapper {
         self.alloc_world(world)
     }
 
-    pub fn push_protocol(&mut self, proto_path: PathBuf) -> Result<InterfaceId> {
+    pub fn push_protocol(&mut self, proto_path: &PathBuf) -> Result<InterfaceId> {
         if !proto_path.is_file() {
             let p = proto_path.display();
             return Err(anyhow!("Protocol path {p} must be a file."));
@@ -473,7 +473,7 @@ mod test_parser {
         let proto_path = test_dir.join(proto_name);
 
         let mut mapper = IdfMapper::new();
-        let interface = mapper.push_protocol(proto_path)?;
+        let interface = mapper.push_protocol(&proto_path)?;
 
         mapper.push_world("foo", None, Some(interface));
 
@@ -508,8 +508,8 @@ mod test_parser {
         let test_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "testdata"].iter().collect();
 
         let mut mapper = IdfMapper::new();
-        let hw_interface = mapper.push_protocol(test_dir.join("helloworld.proto"))?;
-        let prodcon_interface = mapper.push_protocol(test_dir.join("prodcon.proto"))?;
+        let hw_interface = mapper.push_protocol(&test_dir.join("helloworld.proto"))?;
+        let prodcon_interface = mapper.push_protocol(&test_dir.join("prodcon.proto"))?;
 
         mapper.push_world(
             "producer-interface",

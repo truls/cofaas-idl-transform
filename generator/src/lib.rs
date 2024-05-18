@@ -15,10 +15,11 @@ use std::{
 use thiserror::Error;
 use wit_component::WitPrinter;
 use wit_parser::{
-    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId, Record,
+    Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, PackageId, Record,
     Resolve, Result_, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, UnresolvedPackage,
     World, WorldItem, WorldKey,
 };
+pub use wit_parser::InterfaceId;
 
 use std::fmt::Write;
 

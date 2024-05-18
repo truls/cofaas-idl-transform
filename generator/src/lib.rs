@@ -16,8 +16,8 @@ use thiserror::Error;
 use wit_component::WitPrinter;
 use wit_parser::{
     Docs, Enum, EnumCase, Field, Function, FunctionKind, Interface, InterfaceId, PackageId, Record,
-    Resolve, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, UnresolvedPackage, World,
-    WorldItem, WorldKey, Result_,
+    Resolve, Result_, Results, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, UnresolvedPackage,
+    World, WorldItem, WorldKey,
 };
 
 use std::fmt::Write;
@@ -217,12 +217,15 @@ impl IdfMapper {
                             referenced_types.push(type_id);
 
                             // Construct a type of result<resturn_type, s32)
-                            let result_type = TypeDef{
+                            let result_type = TypeDef {
                                 docs: Docs::default(),
-                                kind: TypeDefKind::Result(Result_{ok: Some(Type::Id(type_id)),
-                                                                  err: Some(Type::S32)}),
+                                kind: TypeDefKind::Result(Result_ {
+                                    ok: Some(Type::Id(type_id)),
+                                    err: Some(Type::S32),
+                                }),
                                 name: None,
-                                owner: TypeOwner::None};
+                                owner: TypeOwner::None,
+                            };
                             let result_type_id = self.pkg.types.alloc(result_type);
                             Ok::<Results, Error>(Results::Anon(Type::Id(result_type_id)))
                         })?;
@@ -289,7 +292,10 @@ impl IdfMapper {
 
             let ty_name_ = self.proto_type_ref(&ty_name);
             if self.type_map.contains_key(&ty_name_) {
-                return Err(anyhow!("Type {} already exists. Did you try to push the same protocol twice?", ty_name));
+                return Err(anyhow!(
+                    "Type {} already exists. Did you try to push the same protocol twice?",
+                    ty_name
+                ));
             }
             //println!("{}", ty_name_);
             assert!(self.type_map.insert(ty_name_, *t).is_none());

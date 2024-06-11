@@ -1,4 +1,4 @@
-package cofaas:application
+package cofaas:application;
 
 interface greeter {
   record hello-request {
@@ -9,13 +9,13 @@ interface greeter {
     message: string,
   }
 
-  say-hello: func(arg: hello-request) -> result<hello-reply, s32>
+  say-hello: func(arg: hello-request) -> result<hello-reply, s32>;
 
-  say-hello-stream-reply: func(arg: hello-request) -> result<hello-reply, s32>
+  say-hello-stream-reply: func(arg: hello-request) -> result<hello-reply, s32>;
 
-  init-component: func()
+  init-component: func();
 }
 
 world foo {
-  export greeter
+  export greeter;
 }

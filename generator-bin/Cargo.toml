@@ -9,7 +9,7 @@ edition = "2021"
 anyhow = "1.0.72"
 clap = { version = "4.3.19", features = ["derive"] }
 generator = { version = "0.1.0", path = "../generator" }
-wit-component = { version = "0.13.1", path = "../../deps/wasm-tools/crates/wit-component" }
+wit-component = "0.21.0"
 
 [[bin]]
 name = "grpc-to-wit"

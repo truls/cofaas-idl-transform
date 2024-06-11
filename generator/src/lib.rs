@@ -45,7 +45,7 @@ pub struct IdfMapper {
 
 impl IdfMapper {
     pub fn new() -> Self {
-        let upkg = Self::unsafe_parse_wit_to_unresolved_package("package cofaas:application\n");
+        let upkg = Self::unsafe_parse_wit_to_unresolved_package("package cofaas:application;\n");
 
         Self {
             orig_package_name: None,
@@ -372,15 +372,15 @@ impl IdfMapper {
         let mut worlds = self.pkg.worlds.clone();
         worlds.alloc(world);
 
-        write!(&mut witb, "package foo:bar\n").unwrap();
+        write!(&mut witb, "package foo:bar;\n").unwrap();
 
         for (n, (_, world)) in enumerate(worlds.iter()) {
             write!(&mut witb, "world w{} {{\n", n).unwrap();
             for n in 0..world.exports.len() {
-                write!(&mut witb, "export ex{}: func()\n", n).unwrap();
+                write!(&mut witb, "export ex{}: func();\n", n).unwrap();
             }
             for n in 0..world.imports.len() {
-                write!(&mut witb, "import im{}: func()\n", n).unwrap();
+                write!(&mut witb, "import im{}: func();\n", n).unwrap();
             }
             write!(&mut witb, "}}\n").unwrap();
         }

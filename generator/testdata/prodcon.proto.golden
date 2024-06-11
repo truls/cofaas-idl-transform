@@ -1,4 +1,4 @@
-package cofaas:application
+package cofaas:application;
 
 interface producer-consumer {
   record consume-byte-request {
@@ -10,13 +10,13 @@ interface producer-consumer {
     length: s32,
   }
 
-  consume-byte: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
+  consume-byte: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>;
 
-  consume-stream: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
+  consume-stream: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>;
 
-  init-component: func()
+  init-component: func();
 }
 
 world foo {
-  export producer-consumer
+  export producer-consumer;
 }

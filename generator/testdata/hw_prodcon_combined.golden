@@ -1,4 +1,4 @@
-package cofaas:application
+package cofaas:application;
 
 interface greeter {
   record hello-request {
@@ -9,11 +9,11 @@ interface greeter {
     message: string,
   }
 
-  say-hello: func(arg: hello-request) -> result<hello-reply, s32>
+  say-hello: func(arg: hello-request) -> result<hello-reply, s32>;
 
-  say-hello-stream-reply: func(arg: hello-request) -> result<hello-reply, s32>
+  say-hello-stream-reply: func(arg: hello-request) -> result<hello-reply, s32>;
 
-  init-component: func()
+  init-component: func();
 }
 
 interface producer-consumer {
@@ -26,21 +26,21 @@ interface producer-consumer {
     length: s32,
   }
 
-  consume-byte: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
+  consume-byte: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>;
 
-  consume-stream: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>
+  consume-stream: func(arg: consume-byte-request) -> result<consume-byte-reply, s32>;
 
-  init-component: func()
+  init-component: func();
 }
 
 world producer-interface {
-  import producer-consumer
+  import producer-consumer;
 
-  export greeter
+  export greeter;
 }
 world consumer-interface {
-  export producer-consumer
+  export producer-consumer;
 }
 world top-level {
-  export greeter
+  export greeter;
 }

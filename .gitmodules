@@ -1,0 +1,3 @@
+[submodule "deps/rust-protobuf"]
+	path = deps/rust-protobuf
+	url = git@github.com:stepancheg/rust-protobuf
